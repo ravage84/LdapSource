@@ -1350,32 +1350,33 @@ class LdapSource extends DataSource {
 		return null;
 	}
 
+
 /**
- * Returns the count of records
+ * Returns an calculation, i.e. COUNT() or MAX()
  *
- * @param model $model
+ * @param Model $model
  * @param string $func Lowercase name of SQL function, i.e. 'count' or 'max'
  * @param array $params Function parameters (any values must be quoted manually)
- * @return string	   entry count
+ * @return string An SQL calculation function
  */
-		public function calculate(&$model, $func, $params = array()) {
-				$params = (array)$params;
+	public function calculate(Model $model, $func, $params = array()) {
+		$params = (array)$params;
 
-				switch (strtolower($func)) {
-						case 'count':
-							if (empty($params) && $model->id) {
-								//quick search to make sure it exsits
-								$queryData['targetDn'] = $model->id;
-								$queryData['conditions'] = 'objectClass=*';
-								$queryData['scope'] = 'base';
-								$query = $this->read($model, $queryData);
-							}
-							return $this->count;
-						case 'max':
-						case 'min':
-						break;
+		switch (strtolower($func)) {
+			case 'count':
+				if (empty($params) && $model->id) {
+					//quick search to make sure it exsits
+					$queryData['targetDn'] = $model->id;
+					$queryData['conditions'] = 'objectClass=*';
+					$queryData['scope'] = 'base';
+					$query = $this->read($model, $queryData);
 				}
+				return $this->count;
+			case 'max':
+			case 'min':
+			break;
 		}
+	}
 
 	public function describe(&$model, $field = null) {
 		$schemas = $this->_getLDAPschema();
@@ -1513,4 +1514,5 @@ class LdapSource extends DataSource {
 		$schemaEntry = ldap_get_entries($this->database, $checkDN);
 		$this->SchemaDN = $schemaEntry[0]['subschemasubentry'][0];
 	}
+
 }
