@@ -182,6 +182,15 @@ class LdapSource extends DataSource {
 	}
 
 /**
+ * Wrapper method to call ldap_* function. Hardcoded ldap functions make test be difficult.
+ */
+	protected function _call() {
+		$args = func_get_args();
+		$funcName = 'ldap_' . array_shift($args);
+		return call_user_func_array($funcName, $args);
+	}
+
+/**
  * Field name
  *
  * This looks weird, but for LDAP we just return the name of the field thats passed as an argument.
@@ -217,11 +226,11 @@ class LdapSource extends DataSource {
 		}
 		$bindDN = (empty($bindDN)) ? $config['login'] : $bindDN;
 		$bindPasswd = (empty($passwd)) ? $config['password'] : $passwd;
-		$this->database = ldap_connect($config['host']);
+		$this->database = $this->_call('connect', $config['host']);
 		if (!$this->database) {
 			//Try Next Server Listed
 			if ($hasFailover) {
-				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse],'ldap.error');
+				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse], 'ldap.error');
 				$this->_multiMasterUse++;
 				$this->connect($bindDN, $passwd);
 				if ($this->connected) {
@@ -231,10 +240,10 @@ class LdapSource extends DataSource {
 		}
 
 		//Set our protocol version usually version 3
-		ldap_set_option($this->database, LDAP_OPT_PROTOCOL_VERSION, $config['version']);
+		$this->_call('set_option', $this->database, LDAP_OPT_PROTOCOL_VERSION, $config['version']);
 
 		if ($config['tls']) {
-			if (!ldap_start_tls($this->database)) {
+			if (!$this->_call('start_tls', $this->database)) {
 				$this->log('Ldap_start_tls failed', 'ldap.error');
 				throw new Exception('Ldap_start_tls failed');
 			}
@@ -242,9 +251,9 @@ class LdapSource extends DataSource {
 		//So little known fact, if your php-ldap lib is built against openldap like pretty much every linux
 		//distro out their like redhat, suse etc. The connect doesn't acutally happen when you call ldap_connect
 		//it happens when you call ldap_bind. So if you are using failover then you have to test here also.
-		$bindResult = ldap_bind($this->database, $bindDN, $bindPasswd);
+		$bindResult = $this->_call('bind', $this->database, $bindDN, $bindPasswd);
 		if (!$bindResult) {
-			if (ldap_errno($this->database) == 49) {
+			if ($this->_call('errno', $this->database) == 49) {
 				$this->log("Auth failed for '$bindDN'!",'ldap.error');
 			} else {
 				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse],'ldap.error');
@@ -297,8 +306,8 @@ class LdapSource extends DataSource {
  *
  */
 	public function disconnect() {
-		ldap_free_result($this->results);
-		ldap_unbind($this->database);
+		$this->_call('free_result', $this->results);
+		$this->_call('unbind', $this->database);
 		$this->connected = false;
 		return $this->connected;
 	}
@@ -376,14 +385,14 @@ class LdapSource extends DataSource {
 		}
 		$dn = $key . $table . $basedn;
 
-		$res = ldap_add($this->database, $dn, $fieldsData);
+		$res = $this->_call('add', $this->database, $dn, $fieldsData);
 		// Add the entry
 		if ($res) {
 			$model->setInsertID($id);
 			$model->id = $id;
 			return true;
 		} else {
-			$this->log("Failed to add ldap entry: dn:$dn\nData:" . print_r($fieldsData, true) . "\n" . ldap_error($this->database), 'ldap.error');
+			$this->log("Failed to add ldap entry: dn:$dn\nData:" . print_r($fieldsData, true) . "\n" . $this->_call('error', $this->database), 'ldap.error');
 			$model->onError();
 			return false;
 		}
@@ -477,8 +486,8 @@ class LdapSource extends DataSource {
 		}
 
 		// Format results -----------------------------
-		ldap_sort($this->database, $res, $queryData['order'][0]);
-		$resultSet = ldap_get_entries($this->database, $res);
+		$this->_call('sort', $this->database, $res, $queryData['order'][0]);
+		$resultSet = $this->_call('get_entries', $this->database, $res);
 		$resultSet = $this->_ldapFormat($model, $resultSet);
 
 		// Query on linked models ----------------------
@@ -564,10 +573,10 @@ class LdapSource extends DataSource {
 		if ($resultSet) {
 			$_dn = $resultSet[0][$model->alias]['dn'];
 
-			if (ldap_modify($this->database, $_dn, $entry)) {
+			if ($this->_call('modify', $this->database, $_dn, $entry)) {
 				return true;
 			} else {
-				$this->log("Error updating $_dn: " . ldap_error($this->database) . "\nHere is what I sent: " . print_r($entry, true), 'ldap.error');
+				$this->log("Error updating $_dn: " . $this->_call('error', $this->database) . "\nHere is what I sent: " . print_r($entry, true), 'ldap.error');
 				return false;
 			}
 		}
@@ -609,14 +618,14 @@ class LdapSource extends DataSource {
 				}
 			} else {
 				// Single entry delete
-				if (ldap_delete( $this->database, $dn)) {
+				if ($this->_call('delete', $this->database, $dn)) {
 					return true;
 				}
 			}
 		}
 
 		$model->onError();
-		$errMsg = ldap_error($this->database);
+		$errMsg = $this->_call('error', $this->database);
 		$this->log("Failed Trying to delete: $dn \nLdap Erro:$errMsg", 'ldap.error');
 		return false;
 	}
@@ -626,8 +635,8 @@ class LdapSource extends DataSource {
  */
 	protected function _deleteRecursively($_dn) {
 		// Search for sub entries
-		$subentries = ldap_list($this->database, $_dn, "objectClass=*", array());
-		$info = ldap_get_entries($this->database, $subentries);
+		$subentries = $this->_call('list', $this->database, $_dn, "objectClass=*", array());
+		$info = $this->_call('get_entries', $this->database, $subentries);
 		for ($i = 0; $i < $info['count']; $i++) {
 			// deleting recursively sub entries
 			$result = $this->_deleteRecursively($info[$i]['dn']);
@@ -636,7 +645,7 @@ class LdapSource extends DataSource {
 			}
 		}
 
-		return ldap_delete($this->database, $_dn);
+		return $this->_call('delete', $this->database, $_dn);
 	}
 
 /**
@@ -712,7 +721,7 @@ class LdapSource extends DataSource {
 			$row = & $resultSet[$i];
 			$queryData = $this->generateAssociationQuery($model, $linkModel, $type, $association, $assocData, $queryData, $external, $row);
 			$fetch = $this->_executeQuery($queryData);
-			$fetch = ldap_get_entries($this->database, $fetch);
+			$fetch = $this->_call('get_entries', $this->database, $fetch);
 			$fetch = $this->_ldapFormat($linkModel,$fetch);
 
 			if (!empty($fetch) && is_array($fetch)) {
@@ -749,8 +758,8 @@ class LdapSource extends DataSource {
  * @return string Error message with error number
  */
 	public function lastError() {
-		if (ldap_errno($this->database)) {
-			return ldap_errno($this->database) . ': ' . ldap_error($this->database);
+		if ($this->_call('errno', $this->database)) {
+			return $this->_call('errno', $this->database) . ': ' . $this->_call('error', $this->database);
 		}
 		return null;
 	}
@@ -763,7 +772,7 @@ class LdapSource extends DataSource {
  */
 	public function lastNumRows() {
 		if ($this->_result && is_resource($this->_result)) {
-			return ldap_count_entries($this->database, $this->_result);
+			return $this->_call('count_entries', $this->database, $this->_result);
 		}
 		return null;
 	}
@@ -786,13 +795,13 @@ class LdapSource extends DataSource {
  */
 	protected function _getLDAPschema() {
 		$schemaTypes = array('objectclasses', 'attributetypes');
-		$this->results = ldap_read($this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
+		$this->results = $this->_call('read', $this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
 		if (is_null($this->results)) {
 			$this->log("LDAP schema filter $this->SchemaFilter is invalid!", 'ldap.error');
 			continue;
 		}
 
-		$schemaEntries = ldap_get_entries($this->database, $this->results);
+		$schemaEntries = $this->_call('get_entries', $this->database, $this->results);
 
 		if ($schemaEntries) {
 			$return = array();
@@ -1188,21 +1197,21 @@ class LdapSource extends DataSource {
 
 					//Handle LDAP Scope
 					if (isset($queryData['scope']) && $queryData['scope'] == 'base') {
-						$res = ldap_read($this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
+						$res = $this->_call('read', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
 					} elseif (isset($queryData['scope']) && $queryData['scope'] == 'one') {
-						$res = ldap_list($this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
+						$res = $this->_call('list', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
 					} else {
 						if ($queryData['fields'] == 1) $queryData['fields'] = array();
-						$res = ldap_search($this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields'], 0, $queryData['limit']);
+						$res = $this->_call('search', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields'], 0, $queryData['limit']);
 					}
 
 					if (!$res) {
 						$res = false;
-						$errMsg = ldap_error($this->database);
+						$errMsg = $this->_call('error', $this->database);
 						$this->log("Query Params Failed:" . print_r($queryData, true) . ' Error: ' . $errMsg, 'ldap.error');
 						$this->count = 0;
 					} else {
-						$this->count = ldap_count_entries($this->database, $res);
+						$this->count = $this->_call('count_entries', $this->database, $res);
 					}
 
 					if ($cache) {
@@ -1212,7 +1221,7 @@ class LdapSource extends DataSource {
 					}
 					break;
 				case 'delete':
-					$res = ldap_delete($this->database, $queryData['targetDn'] . ',' . $this->config['basedn']);
+					$res = $this->_call('delete', $this->database, $queryData['targetDn'] . ',' . $this->config['basedn']);
 					break;
 				default:
 					$res = false;
@@ -1417,7 +1426,7 @@ class LdapSource extends DataSource {
 		);
 		foreach ($opts as $opt) {
 			$ve = '';
-			ldap_get_option($this->database, constant($opt), $ve);
+			$this->_call('get_option', $this->database, constant($opt), $ve);
 			$this->log("Option={$opt}, Value=" . print_r($ve, true),'debug');
 		}
 	}
@@ -1491,7 +1500,7 @@ class LdapSource extends DataSource {
 
 	public function setActiveDirectoryEnv() {
 		//Need to disable referals for AD
-		ldap_set_option($this->database, LDAP_OPT_REFERRALS, 0);
+		$this->_call('set_option', $this->database, LDAP_OPT_REFERRALS, 0);
 		$this->OperationalAttributes = ' + ';
 		$this->SchemaFilter = '(objectClass=subschema)';
 		$this->SchemaAttributes = implode(' ', array(
@@ -1511,8 +1520,8 @@ class LdapSource extends DataSource {
 	}
 
 	public function setSchemaPath() {
-		$checkDN = ldap_read($this->database, '', 'objectClass=*', array('subschemaSubentry'));
-		$schemaEntry = ldap_get_entries($this->database, $checkDN);
+		$checkDN = $this->_call('read', $this->database, '', 'objectClass=*', array('subschemaSubentry'));
+		$schemaEntry = $this->_call('get_entries', $this->database, $checkDN);
 		$this->SchemaDN = $schemaEntry[0]['subschemasubentry'][0];
 	}
 
