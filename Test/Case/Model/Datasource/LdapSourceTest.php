@@ -103,4 +103,7 @@ class LdapSourceTest extends CakeTestCase {
 		$this->assertTrue($result);
 	}
 
+	public function testRead() {
+	}
+
 }

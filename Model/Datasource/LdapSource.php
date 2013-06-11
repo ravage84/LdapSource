@@ -151,6 +151,7 @@ class LdapSource extends DataSource {
 		'host' => 'localhost',
 		'port' => 389,
 		'tls' => false,
+		'database' => '',
 		'version' => 3
 	);
 
@@ -297,9 +298,9 @@ class LdapSource extends DataSource {
 		$bindResult = $this->_call('bind', $this->database, $bindDN, $bindPasswd);
 		if (!$bindResult) {
 			if ($this->_call('errno', $this->database) == 49) {
-				$this->log("Auth failed for '$bindDN'!",'ldap.error');
+				$this->log("Auth failed for '$bindDN'!", 'ldap.error');
 			} elseif ($hasFailover) {
-				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse],'ldap.error');
+				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse], 'ldap.error');
 				$this->_multiMasterUse++;
 				$this->connect($bindDN, $passwd);
 				if ($this->connected) {
@@ -326,7 +327,7 @@ class LdapSource extends DataSource {
 		if ($this->connected) {
 			return true;
 		} else {
-			$this->log("Auth Error: for '$dn': " . $this->lastError(),'ldap.error');
+			$this->log("Auth Error: for '$dn': " . $this->lastError(), 'ldap.error');
 			return $this->lastError();
 		}
 	}
@@ -349,7 +350,9 @@ class LdapSource extends DataSource {
  */
 	public function disconnect() {
 		foreach ($this->_results as $result) {
-			$this->_call('free_result', $result);
+			if (is_resource($result)) {
+				$this->_call('free_result', $result);
+			}
 		}
 		$this->_call('unbind', $this->database);
 		$this->connected = false;
@@ -469,7 +472,7 @@ class LdapSource extends DataSource {
 				case 'auth':
 					return $this->auth($query['dn'], $query['password']);
 				case 'findSchema':
-					$query = $this->_getLDAPschema();
+					$query = $this->_getLDAPSchema();
 					// $this->findSchema($query);
 					break;
 				case 'findConfig':
@@ -523,7 +526,7 @@ class LdapSource extends DataSource {
 		}
 
 		// Execute search query ------------------------
-		$res = $this->_executeQuery($queryData );
+		$res = $this->_executeQuery($queryData);
 
 		if ($this->lastNumRows() === 0) {
 			return false;
@@ -642,7 +645,7 @@ class LdapSource extends DataSource {
 			$dn = $model->id;
 		} else {
 			// Find the user we will update as we need their dn
-			if ($model->defaultObjectClass) {
+			if (!empty($model->defaultObjectClass)) {
 				$options['conditions'] = sprintf('(&(objectclass=%s)(%s=%s))', $model->defaultObjectClass, $model->primaryKey, $model->id);
 			} else {
 				$options['conditions'] = sprintf('%s=%s', $model->primaryKey, $model->id);
@@ -706,25 +709,20 @@ class LdapSource extends DataSource {
 				$queryData['type'] = 'search';
 				$queryData['limit'] = 1;
 				return $queryData;
-
 			case 'belongsTo' :
 				$id = $resultSet[$model->name][$assocData['foreignKey']];
 				$queryData['conditions'] = trim($linkModel->primaryKey) . '=' . trim($id);
 				$queryData['targetDn'] = $linkModel->useTable;
 				$queryData['type'] = 'search';
 				$queryData['limit'] = 1;
-
 				return $queryData;
-
 			case 'hasMany' :
 				$id = $resultSet[$model->name][$model->primaryKey];
 				$queryData['conditions'] = trim($assocData['foreignKey']) . '=' . trim($id);
 				$queryData['targetDn'] = $linkModel->useTable;
 				$queryData['type'] = 'search';
 				$queryData['limit'] = $assocData['limit'];
-
 				return $queryData;
-
 			case 'hasAndBelongsToMany' :
 				return null;
 		}
@@ -802,8 +800,8 @@ class LdapSource extends DataSource {
  * @return string Error message with error number
  */
 	public function lastError() {
-		if ($this->_call('errno', $this->database)) {
-			return $this->_call('errno', $this->database) . ': ' . $this->_call('error', $this->database);
+		if ($errno = $this->_call('errno', $this->database)) {
+			return $errno . ': ' . $this->_call('err2str', $errno);
 		}
 		return null;
 	}
@@ -837,12 +835,12 @@ class LdapSource extends DataSource {
 /**
  * The following was kindly "borrowed" from the excellent phpldapadmin project
  */
-	protected function _getLDAPschema() {
+	protected function _getLDAPSchema() {
 		$schemaTypes = array('objectclasses', 'attributetypes');
 		$results = $this->_call('read', $this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
-		if (is_null($results)) {
-			$this->log("LDAP schema filter $this->SchemaFilter is invalid!", 'ldap.error');
-			continue;
+		if (false === $results) {
+			trigger_error("LDAP schema filter '$this->SchemaFilter' is invalid!");
+			return;
 		}
 
 		$schemaEntries = $this->_call('get_entries', $this->database, $results);
@@ -1095,10 +1093,10 @@ class LdapSource extends DataSource {
 		$name = $model->name;
 
 		if (is_array($conditions) && count($conditions) == 1) {
-			$sqlHack = "$name . $key";
+			$sqlHack = "$name.$key";
 			$conditions = str_ireplace($sqlHack, $key, $conditions);
 			foreach ($conditions as $k => $v) {
-				if ($k == $name . ' . dn') {
+				if ($k == $name . '.dn') {
 					$res = substr($v, 0, strpos($v, ','));
 				} elseif ($k == $sqlHack && (empty($v) || $v == '*')) {
 					$res = 'objectclass=*';
@@ -1125,6 +1123,7 @@ class LdapSource extends DataSource {
 		}
 		return $res;
 	}
+
 /**
  * Convert an array into a ldap condition string
  *
@@ -1144,7 +1143,7 @@ class LdapSource extends DataSource {
 			$operand = $operand[0];
 
 			if (!in_array($operand, array_keys($ops))) {
-				$this->log("No operators defined in LDAP search conditions . ",'ldap.error');
+				$this->log("No operators defined in LDAP search conditions . ", 'ldap.error');
 				return null;
 			}
 
@@ -1191,7 +1190,7 @@ class LdapSource extends DataSource {
 	}
 
 	protected function _executeQuery($queryData = array(), $cache = true) {
-		$t = getMicrotime();
+		$t = microtime(true);
 
 		$pattern = '/,[ \t]+(\w+)=/';
 		$queryData['targetDn'] = preg_replace($pattern, ',$1=', $queryData['targetDn']);
@@ -1262,9 +1261,10 @@ class LdapSource extends DataSource {
 		}
 
 		$this->_result = $res;
-		$this->took = round((getMicrotime() - $t) * 1000, 0);
+		$this->took = round((microtime(true) - $t) * 1000, 0);
 		$this->error = $this->lastError();
 		$this->numRows = $this->lastNumRows();
+		$this->affected = null;
 
 		if ($this->fullDebug) {
 			$this->logQuery($query);
@@ -1422,7 +1422,7 @@ class LdapSource extends DataSource {
 
 	public function describe($model) {
 		$args = func_get_args();
-		$schemas = $this->_getLDAPschema();
+		$schemas = $this->_getLDAPSchema();
 		$attrs = $schemas['attributetypes'];
 		ksort($attrs);
 		if (count($args) > 1) {
@@ -1551,6 +1551,7 @@ class LdapSource extends DataSource {
 
 	public function setOpenLDAPEnv() {
 		$this->OperationalAttributes = ' + ';
+		$this->SchemaFilter = '(objectClass=*)';
 	}
 
 	public function setSchemaPath() {
