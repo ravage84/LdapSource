@@ -971,7 +971,6 @@ class LdapSource extends DataSource {
  * Log given LDAP query.
  *
  * @param string $query LDAP statement
- * @todo: Add hook to log errors instead of returning false
  */
 	public function logQuery($query) {
 		$this->_queriesCnt++;
@@ -987,6 +986,7 @@ class LdapSource extends DataSource {
 			array_pop($this->_queriesLog);
 		}
 		if ($this->error) {
+			$this->log($this->error, 'ldap.error');
 			return false;
 		}
 	}
