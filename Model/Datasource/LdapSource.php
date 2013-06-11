@@ -203,6 +203,7 @@ class LdapSource extends DataSource {
  * @param string the users dn to bind with
  * @param string the password for the previously state bindDN
  * @return boolean the status of the connection
+ * @throws Exception when tls option was specified and starting tls was failed
  */
 	public function connect($bindDN = null, $passwd = null) {
 		$config = array_merge($this->_baseConfig, $this->config);
@@ -235,7 +236,7 @@ class LdapSource extends DataSource {
 		if ($config['tls']) {
 			if (!ldap_start_tls($this->database)) {
 				$this->log('Ldap_start_tls failed', 'ldap.error');
-				fatal_error("Ldap_start_tls failed");
+				throw new Exception('Ldap_start_tls failed');
 			}
 		}
 		//So little known fact, if your php-ldap lib is built against openldap like pretty much every linux
