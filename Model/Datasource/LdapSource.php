@@ -1398,7 +1398,21 @@ class LdapSource extends DataSource {
  *
  */
 	public function debugLDAPConnection() {
-		$opts = array('LDAP_OPT_DEREF', 'LDAP_OPT_SIZELIMIT', 'LDAP_OPT_TIMELIMIT', 'LDAP_OPT_NETWORK_TIMEOUT', 'LDAP_OPT_PROTOCOL_VERSION', 'LDAP_OPT_ERROR_NUMBER', 'LDAP_OPT_REFERRALS', 'LDAP_OPT_RESTART', 'LDAP_OPT_HOST_NAME', 'LDAP_OPT_ERROR_STRING', 'LDAP_OPT_MATCHED_DN', 'LDAP_OPT_SERVER_CONTROLS', 'LDAP_OPT_CLIENT_CONTROLS');
+		$opts = array(
+			'LDAP_OPT_DEREF',
+			'LDAP_OPT_SIZELIMIT',
+			'LDAP_OPT_TIMELIMIT',
+			'LDAP_OPT_NETWORK_TIMEOUT',
+			'LDAP_OPT_PROTOCOL_VERSION',
+			'LDAP_OPT_ERROR_NUMBER',
+			'LDAP_OPT_REFERRALS',
+			'LDAP_OPT_RESTART',
+			'LDAP_OPT_HOST_NAME',
+			'LDAP_OPT_ERROR_STRING',
+			'LDAP_OPT_MATCHED_DN',
+			'LDAP_OPT_SERVER_CONTROLS',
+			'LDAP_OPT_CLIENT_CONTROLS'
+		);
 		foreach ($opts as $opt) {
 			$ve = '';
 			ldap_get_option($this->database,constant($opt), $ve);
@@ -1413,9 +1427,64 @@ class LdapSource extends DataSource {
  * show up
  */
 	public function setNetscapeEnv() {
-		$this->OperationalAttributes = 'accountUnlockTime aci copiedFrom copyingFrom createTimestamp creatorsName dncomp entrydn entryid hasSubordinates ldapSchemas ldapSyntaxes modifiersName modifyTimestamp nsAccountLock nsAIMStatusGraphic nsAIMStatusText nsBackendSuffix nscpEntryDN nsds5ReplConflict nsICQStatusGraphic nsICQStatusText nsIdleTimeout nsLookThroughLimit nsRole nsRoleDN nsSchemaCSN nsSizeLimit nsTimeLimit nsUniqueId nsYIMStatusGraphic nsYIMStatusText numSubordinates parentid passwordAllowChangeTime passwordExpirationTime passwordExpWarned passwordGraceUserTime passwordHistory passwordRetryCount pwdExpirationWarned pwdGraceUserTime pwdHistory pwdpolicysubentry retryCountResetTime subschemaSubentry';
+		$this->OperationalAttributes = implode(' ', array(
+			'accountUnlockTime',
+			'aci',
+			'copiedFrom',
+			'copyingFrom',
+			'createTimestamp',
+			'creatorsName',
+			'dncomp',
+			'entrydn',
+			'entryid',
+			'hasSubordinates',
+			'ldapSchemas',
+			'ldapSyntaxes',
+			'modifiersName',
+			'modifyTimestamp',
+			'nsAccountLock',
+			'nsAIMStatusGraphic',
+			'nsAIMStatusText',
+			'nsBackendSuffix',
+			'nscpEntryDN',
+			'nsds5ReplConflict',
+			'nsICQStatusGraphic',
+			'nsICQStatusText',
+			'nsIdleTimeout',
+			'nsLookThroughLimit',
+			'nsRole',
+			'nsRoleDN',
+			'nsSchemaCSN',
+			'nsSizeLimit',
+			'nsTimeLimit',
+			'nsUniqueId',
+			'nsYIMStatusGraphic',
+			'nsYIMStatusText',
+			'numSubordinates',
+			'parentid',
+			'passwordAllowChangeTime',
+			'passwordExpirationTime',
+			'passwordExpWarned',
+			'passwordGraceUserTime',
+			'passwordHistory',
+			'passwordRetryCount',
+			'pwdExpirationWarned',
+			'pwdGraceUserTime',
+			'pwdHistory',
+			'pwdpolicysubentry',
+			'retryCountResetTime',
+			'subschemaSubentry'
+		));
 		$this->SchemaFilter = '(objectClass=subschema)';
-		$this->SchemaAttributes = 'objectClasses attributeTypes ldapSyntaxes matchingRules matchingRuleUse createTimestamp modifyTimestamp';
+		$this->SchemaAttributes = implode(' ', array(
+			'objectClasses',
+			'attributeTypes',
+			'ldapSyntaxes',
+			'matchingRules',
+			'matchingRuleUse',
+			'createTimestamp',
+			'modifyTimestamp'
+		));
 	}
 
 	public function setActiveDirectoryEnv() {
@@ -1423,7 +1492,16 @@ class LdapSource extends DataSource {
 		ldap_set_option($this->database, LDAP_OPT_REFERRALS, 0);
 		$this->OperationalAttributes = ' + ';
 		$this->SchemaFilter = '(objectClass=subschema)';
-		$this->SchemaAttributes = 'objectClasses attributeTypes ldapSyntaxes matchingRules matchingRuleUse createTimestamp modifyTimestamp subschemaSubentry';
+		$this->SchemaAttributes = implode(' ', array(
+			'objectClasses',
+			'attributeTypes',
+			'ldapSyntaxes',
+			'matchingRules',
+			'matchingRuleUse',
+			'createTimestamp',
+			'modifyTimestamp',
+			'subschemaSubentry'
+		));
 	}
 
 	public function setOpenLDAPEnv() {
