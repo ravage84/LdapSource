@@ -234,7 +234,7 @@ class LdapSource extends DataSource {
 
 		if ($config['tls']) {
 			if (!ldap_start_tls($this->database)) {
-				$this->log("Ldap_start_tls failed", 'ldap.error');
+				$this->log('Ldap_start_tls failed', 'ldap.error');
 				fatal_error("Ldap_start_tls failed");
 			}
 		}
@@ -1101,7 +1101,7 @@ class LdapSource extends DataSource {
 			$operand = array_keys($conditions);
 			$operand = $operand[0];
 
-			if (!in_array($operand,array_keys($ops))) {
+			if (!in_array($operand, array_keys($ops))) {
 				$this->log("No operators defined in LDAP search conditions . ",'ldap.error');
 				return null;
 			}
@@ -1132,7 +1132,7 @@ class LdapSource extends DataSource {
 				$tmp = '';
 				foreach ($children as $key => $value) {
 					if ( !is_array($value))
-						$tmp .= '(' . $key . '=' . ((is_null($value))?$opsTer['equals']['null']:$value) . ')';
+						$tmp .= '(' . $key . '=' . ((is_null($value))?$opsTer['equals']['null'] : $value) . ')';
 					else
 						foreach ($value as $subvalue)
 							$tmp .= $this->_conditionsArrayToString(array('equals' => array($key => $subvalue)));
@@ -1152,9 +1152,9 @@ class LdapSource extends DataSource {
 		$t = getMicrotime();
 
 		$pattern = '/,[ \t]+(\w+)=/';
-		$queryData['targetDn'] = preg_replace($pattern, ',$1=',$queryData['targetDn']);
+		$queryData['targetDn'] = preg_replace($pattern, ',$1=', $queryData['targetDn']);
 		if (!$this->checkBaseDn($queryData['targetDn'])) {
-			$this->log("Missing BaseDN in " . $queryData['targetDn'],'debug');
+			$this->log("Missing BaseDN in " . $queryData['targetDn'], 'debug');
 
 			if ($queryData['targetDn'] != null) {
 				$seperator = (substr($queryData['targetDn'], -1) == ',') ? '' : ',';
@@ -1181,7 +1181,7 @@ class LdapSource extends DataSource {
 			switch ($queryData['type']) {
 				case 'search':
 					// TODO pb ldap_search & $queryData['limit']
-					if ( empty($queryData['fields'])) {
+					if (empty($queryData['fields'])) {
 						$queryData['fields'] = $this->defaultNSAttributes();
 					}
 
@@ -1198,7 +1198,7 @@ class LdapSource extends DataSource {
 					if (!$res) {
 						$res = false;
 						$errMsg = ldap_error($this->database);
-						$this->log("Query Params Failed:" . print_r($queryData,true) . ' Error: ' . $errMsg,'ldap.error');
+						$this->log("Query Params Failed:" . print_r($queryData, true) . ' Error: ' . $errMsg, 'ldap.error');
 						$this->count = 0;
 					} else {
 						$this->count = ldap_count_entries($this->database, $res);
@@ -1416,8 +1416,8 @@ class LdapSource extends DataSource {
 		);
 		foreach ($opts as $opt) {
 			$ve = '';
-			ldap_get_option($this->database,constant($opt), $ve);
-			$this->log("Option={$opt}, Value=" . print_r($ve,1),'debug');
+			ldap_get_option($this->database, constant($opt), $ve);
+			$this->log("Option={$opt}, Value=" . print_r($ve, true),'debug');
 		}
 	}
 
