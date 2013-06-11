@@ -205,7 +205,7 @@ class LdapSource extends DataSource {
  * @return boolean the status of the connection
  */
 	public function connect($bindDN = null, $passwd = null) {
-		$config = am($this->_baseConfig, $this->config);
+		$config = array_merge($this->_baseConfig, $this->config);
 		$this->connected = false;
 		$hasFailover = false;
 		if (isset($config['host']) && is_array($config['host'])) {
@@ -320,7 +320,7 @@ class LdapSource extends DataSource {
 	public function reconnect($config = null) {
 		$this->disconnect();
 		if ($config != null) {
-			$this->config = am($this->_baseConfig, $this->config, $config);
+			$this->config = array_merge($this->_baseConfig, $this->config, $config);
 		}
 		return $this->connect();
 	}
@@ -696,11 +696,11 @@ class LdapSource extends DataSource {
 	public function queryAssociation(Model $model, &$linkModel, $type, $association, $assocData, &$queryData, $external, &$resultSet, $recursive, $stack) {
 		if (!isset($resultSet) || !is_array($resultSet)) {
 			if (Configure::read() > 0) {
-				e('<div style = "font: Verdana bold 12px; color: #FF0000">SQL Error in model ' . $model->name . ': ');
+				echo '<div style = "font: Verdana bold 12px; color: #FF0000">SQL Error in model ' . $model->name . ': ';
 				if (isset($this->error) && $this->error != null) {
-					e($this->error);
+					echo $this->error;
 				}
-				e('</div>');
+				echo '</div>';
 			}
 			return null;
 		}
