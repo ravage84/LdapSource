@@ -104,6 +104,37 @@ class LdapSource extends DataSource {
  */
 	public $SchemaFilter;
 
+
+/**
+ * Queries count.
+ *
+ * @var integer
+ */
+	protected $_queriesCnt = 0;
+
+/**
+ * Total duration of all queries.
+ *
+ * @var integer
+ */
+	protected $_queriesTime = null;
+
+/**
+ * Log of queries executed by this DataSource
+ *
+ * @var array
+ */
+	protected $_queriesLog = array();
+
+/**
+ * Maximum number of items in query log
+ *
+ * This is to prevent query log taking over too much memory.
+ *
+ * @var integer Maximum number of queries in the queries log.
+ */
+	protected $_queriesLogMax = 200;
+
 /**
  * Result for formal queries
  *
@@ -119,6 +150,7 @@ class LdapSource extends DataSource {
 	protected $_baseConfig = array (
 		'host' => 'localhost',
 		'port' => 389,
+		'tls' => false,
 		'version' => 3
 	);
 
@@ -135,6 +167,13 @@ class LdapSource extends DataSource {
  * @var array
  */
 	protected $_descriptions = array();
+
+/**
+ * Results
+ *
+ * @var array
+ */
+	protected $_results = array();
 
 /**
  * Constructor
@@ -187,7 +226,11 @@ class LdapSource extends DataSource {
 	protected function _call() {
 		$args = func_get_args();
 		$funcName = 'ldap_' . array_shift($args);
-		return call_user_func_array($funcName, $args);
+		$result = call_user_func_array($funcName, $args);
+		if (strtolower($funcName) === 'ldap_read') {
+			$this->_results[] = $result;
+		}
+		return $result;
 	}
 
 /**
@@ -255,7 +298,7 @@ class LdapSource extends DataSource {
 		if (!$bindResult) {
 			if ($this->_call('errno', $this->database) == 49) {
 				$this->log("Auth failed for '$bindDN'!",'ldap.error');
-			} else {
+			} elseif ($hasFailover) {
 				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse],'ldap.error');
 				$this->_multiMasterUse++;
 				$this->connect($bindDN, $passwd);
@@ -263,7 +306,6 @@ class LdapSource extends DataSource {
 					return $this->connected;
 				}
 			}
-
 		} else {
 			$this->connected = true;
 		}
@@ -302,11 +344,13 @@ class LdapSource extends DataSource {
 	}
 
 /**
- * disconnect  close connection and release any remaining results in the buffer
+ * disconnect close connection and release any remaining results in the buffer
  *
  */
 	public function disconnect() {
-		$this->_call('free_result', $this->results);
+		foreach ($this->_results as $result) {
+			$this->_call('free_result', $result);
+		}
 		$this->_call('unbind', $this->database);
 		$this->connected = false;
 		return $this->connected;
@@ -345,7 +389,7 @@ class LdapSource extends DataSource {
  * @param array $values containing the fields' values
  * @return true on success, false on error
  */
-	public function create($model, $fields = null, $values = null) {
+	public function create(Model $model, $fields = null, $values = null) {
 		$basedn = $this->config['basedn'];
 		$key = $model->primaryKey;
 		$table = $model->useTable;
@@ -526,7 +570,7 @@ class LdapSource extends DataSource {
 /**
  * The "U" in CRUD
  */
-	public function update(&$model, $fields = null, $values = null) {
+	public function update(Model $model, $fields = null, $values = null, $conditions = null) {
 		$fieldsData = array();
 
 		if ($fields == null) {
@@ -770,7 +814,7 @@ class LdapSource extends DataSource {
  *
  * @return int Number of rows in resultset
  */
-	public function lastNumRows() {
+	public function lastNumRows($source = null) {
 		if ($this->_result && is_resource($this->_result)) {
 			return $this->_call('count_entries', $this->database, $this->_result);
 		}
@@ -795,13 +839,13 @@ class LdapSource extends DataSource {
  */
 	protected function _getLDAPschema() {
 		$schemaTypes = array('objectclasses', 'attributetypes');
-		$this->results = $this->_call('read', $this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
-		if (is_null($this->results)) {
+		$results = $this->_call('read', $this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
+		if (is_null($results)) {
 			$this->log("LDAP schema filter $this->SchemaFilter is invalid!", 'ldap.error');
 			continue;
 		}
 
-		$schemaEntries = $this->_call('get_entries', $this->database, $this->results);
+		$schemaEntries = $this->_call('get_entries', $this->database, $results);
 
 		if ($schemaEntries) {
 			$return = array();
@@ -1002,60 +1046,48 @@ class LdapSource extends DataSource {
 	}
 
 /**
- * Outputs the contents of the queries log.
+ * Get the query log as an array.
  *
- * @param boolean $sorted
+ * @param boolean $sorted Get the queries sorted by time taken, defaults to false.
+ * @param boolean $clear If True the existing log will cleared.
+ * @return array Array of queries run as an array
  */
-	public function showLog($sorted = false) {
+	public function getLog($sorted = false, $clear = true) {
 		if ($sorted) {
 			$log = sortByKey($this->_queriesLog, 'took', 'desc', SORT_NUMERIC);
 		} else {
 			$log = $this->_queriesLog;
 		}
 
-		if ($this->_queriesCnt > 1) {
-			$text = 'queries';
-		} else {
-			$text = 'query';
+		if ($clear) {
+			$this->_queriesLog = array();
 		}
-
-		if (php_sapi_name() != 'cli') {
-			print "<table id=\"cakeSqlLog\" cellspacing=\"0\" border = \"0\">\n<caption>{$this->_queriesCnt} {$text} took {$this->_queriesTime} ms</caption>\n";
-			print "<thead>\n<tr><th>Nr</th><th>Query</th><th>Error</th><th>Affected</th><th>Num . rows</th><th>Took (ms)</th></tr>\n</thead>\n<tbody>\n";
-
-			foreach ($log as $k => $i) {
-				print "<tr><td>" . ($k + 1) . "</td><td>{$i['query']}</td><td>{$i['error']}</td><td style = \"text-align: right\">{$i['affected']}</td><td style = \"text-align: right\">{$i['numRows']}</td><td style = \"text-align: right\">{$i['took']}</td></tr>\n";
-			}
-			print "</table>\n";
-		} else {
-			foreach ($log as $k => $i) {
-				print ($k + 1) . " . {$i['query']} {$i['error']}\n";
-			}
-		}
+		return array('log' => $log, 'count' => $this->_queriesCnt, 'time' => $this->_queriesTime);
 	}
 
 /**
- * Output information about a LDAP query. The query, number of rows in resultset,
- * and execution time in microseconds. If the query fails, an error is output instead.
+ * Outputs the contents of the queries log. If in a non-CLI environment the sql_log element
+ * will be rendered and output. If in a CLI environment, a plain text log is generated.
  *
- * @param string $query Query to show information on.
+ * @param boolean $sorted Get the queries sorted by time taken, defaults to false.
+ * @return void
  */
-	public function showQuery($query) {
-		$error = $this->error;
-		if (strlen($query) > 200 && !$this->fullDebug) {
-			$query = substr($query, 0, 200) . '[...]';
+	public function showLog($sorted = false) {
+		$log = $this->getLog($sorted, false);
+		if (empty($log['log'])) {
+			return;
 		}
-
-		if ($this->debug || $error) {
-			print ("<p style = \"text-align:left\"><b>Query:</b> {$query} <small>[Aff:{$this->affected} Num:{$this->numRows} Took:{$this->took}ms]</small>");
-			if ($error) {
-				print ("<br /><span style = \"color:Red;text-align:left\"><b>ERROR:</b> {$this->error}</span>");
+		if (PHP_SAPI !== 'cli') {
+			$controller = null;
+			$View = new View($controller, false);
+			$View->set('logs', array($this->configKeyName => $log));
+			echo $View->element('sql_dump', array('_forced_from_dbo_' => true));
+		} else {
+			foreach ($log['log'] as $k => $i) {
+				print (($k + 1) . ". {$i['query']}\n");
 			}
-			print ('</p>');
 		}
 	}
-
-	// _ private --------------------------------------------------------------
 
 	protected function _conditions($conditions, $model) {
 		$res = '';
@@ -1388,11 +1420,13 @@ class LdapSource extends DataSource {
 		}
 	}
 
-	public function describe(&$model, $field = null) {
+	public function describe($model) {
+		$args = func_get_args();
 		$schemas = $this->_getLDAPschema();
 		$attrs = $schemas['attributetypes'];
 		ksort($attrs);
-		if (!empty($field)) {
+		if (count($args) > 1) {
+			$field = $args[1];
 			return $attrs[strtolower($field)];
 		} else {
 			return $attrs;
