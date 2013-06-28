@@ -8,20 +8,20 @@
  * Tested with OpenLDAP, Netscape Style LDAP {iPlanet, Fedora, RedhatDS} Active Directory.
  * Supports TLS, multiple ldap servers (Failover not, mirroring), Scheme Detection
  *
- * PHP Version 5
+ * PHP 5
  *
  * CakePHP(tm) : Rapid Development Framework (http://cakephp.org)
- * Copyright 2005-2011, Cake Software Foundation, Inc. (http://cakefoundation.org)
+ * Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
  *
  * Licensed under The MIT License
+ * For full copyright and license information, please see the LICENSE.txt
  * Redistributions of files must retain the above copyright notice.
  *
- * @copyright   Copyright 2005-2010, Cake Software Foundation, Inc. (http://cakefoundation.org)
- * @link        http://cakephp.org CakePHP(tm) Project
- * @package     datasources
- * @subpackage  datasources.models.datasources
- * @since       CakePHP Datasources v 0.3
- * @license     MIT License (http://www.opensource.org/licenses/mit-license.php)
+ * @copyright     Copyright (c) Cake Software Foundation, Inc. (http://cakefoundation.org)
+ * @link          http://cakephp.org CakePHP(tm) Project
+ * @package       Datasources
+ * @since         CakePHP Datasources v 0.3
+ * @license       http://www.opensource.org/licenses/mit-license.php MIT License
  */
 
 App::uses('DataSource', 'Model/Datasource');
@@ -29,43 +29,70 @@ App::uses('DataSource', 'Model/Datasource');
 /**
  * Ldap Datasource
  *
- * @package datasources
- * @subpackage datasources.models.datasources
+ * @package Datasources
+ * @todo move long description code to class comment block
+ * @todo rewrite file header comment block
+ * @todo move updated content from discussion to GitHub
+ * @todo check for new mandatory/recommended properties to implement
+ * @todo check for new mandatory/recommended methods to implement
  */
 class LdapSource extends DataSource {
 
 /**
- * Datasource description
+ * DataSource description
  *
  * @var string
  */
-	public $description = "Ldap Data Source";
+	public $description = "LDAP DataSource";
 
 /**
  * Cache Sources
  *
  * @var boolean
+ * @todo check if still needed/useful
  */
 	public $cacheSources = true;
 
-/**
- * Schema Results
- *
- * @var boolean
- */
-	public $SchemaResults = false;
+	/**
+	 * Print full query debug info?
+	 *
+	 * @var boolean
+	 */
+	public $fullDebug = false;
+
+	/**
+	 * String to hold how many rows were affected by the last SQL operation.
+	 *
+	 * @var string
+	 */
+	public $affected = null;
+
+	/**
+	 * Number of rows in current resultset
+	 *
+	 * @var integer
+	 */
+	public $numRows = null;
+
+	/**
+	 * Time the last query took
+	 *
+	 * @var integer
+	 */
+	public $took = null;
 
 /**
- * Database
+ * A reference to the physical connection of this DataSource
  *
- * @var mixed
+ * @var array
  */
-	public $database = false;
+	protected $_connection = null;
 
 /**
  * Count
  *
  * @var integer
+ * @todo remove/replace with dbosource equivalent
  */
 	public $count = 0;
 
@@ -73,6 +100,7 @@ class LdapSource extends DataSource {
  * Model
  *
  * @var mixed
+ * @todo check if still needed/useful
  */
 	public $model;
 
@@ -87,6 +115,7 @@ class LdapSource extends DataSource {
  * Schema DN
  *
  * @var string
+ * @todo check if still needed/useful
  */
 	public $SchemaDN;
 
@@ -94,6 +123,7 @@ class LdapSource extends DataSource {
  * Schema Attributes
  *
  * @var string
+ * @todo check if still needed/useful
  */
 	public $SchemaAtributes;
 
@@ -101,14 +131,15 @@ class LdapSource extends DataSource {
  * Schema Filter
  *
  * @var string
+ * @todo check if still needed/useful
  */
 	public $SchemaFilter;
-
 
 /**
  * Queries count.
  *
  * @var integer
+ * @todo check if still needed/useful
  */
 	protected $_queriesCnt = 0;
 
@@ -116,6 +147,7 @@ class LdapSource extends DataSource {
  * Total duration of all queries.
  *
  * @var integer
+ * @todo check if still needed/useful
  */
 	protected $_queriesTime = null;
 
@@ -123,6 +155,7 @@ class LdapSource extends DataSource {
  * Log of queries executed by this DataSource
  *
  * @var array
+ * @todo check if still needed/useful
  */
 	protected $_queriesLog = array();
 
@@ -132,6 +165,7 @@ class LdapSource extends DataSource {
  * This is to prevent query log taking over too much memory.
  *
  * @var integer Maximum number of queries in the queries log.
+ * @todo check if still needed/useful
  */
 	protected $_queriesLogMax = 200;
 
@@ -139,19 +173,24 @@ class LdapSource extends DataSource {
  * Result for formal queries
  *
  * @var mixed
+ * @todo check if still needed/useful
  */
 	protected $_result = false;
 
 /**
- * Base configuration
+ * The (default) DataSource configuration
+ *
+ * Our default config options. These options will be customized in our
+ * ``app/Config/database.php`` and will be merged in ``__construct()``.
  *
  * @var array
  */
-	protected $_baseConfig = array (
+	public $config = array (
 		'host' => 'localhost',
 		'port' => 389,
 		'tls' => false,
 		'database' => '',
+		'basedn' => '',
 		'version' => 3
 	);
 
@@ -159,6 +198,7 @@ class LdapSource extends DataSource {
  * MultiMaster Use
  *
  * @var integer
+ * @todo check if still needed/useful
  */
 	protected $_multiMasterUse = 0;
 
@@ -166,6 +206,7 @@ class LdapSource extends DataSource {
  * Descriptions
  *
  * @var array
+ * @todo check if still needed/useful
  */
 	protected $_descriptions = array();
 
@@ -173,6 +214,7 @@ class LdapSource extends DataSource {
  * Results
  *
  * @var array
+ * @todo check if still needed/useful
  */
 	protected $_results = array();
 
@@ -180,14 +222,23 @@ class LdapSource extends DataSource {
  * Constructor
  *
  * @param array $config Configuration
+ * @todo check if still needed/useful
+ * @todo replace debug & fullDebug by direct calls to Configure:read
+ * @todo Insert Exception when PHP's ldap module is not active
+ * @todo check what happens if type is empty
  */
 	public function __construct($config = null) {
-		$this->debug = Configure::read('debug') > 0;
-		$this->fullDebug = Configure::read('debug') > 1;
 		parent::__construct($config);
-		$link = $this->connect();
+		$this->fullDebug = Configure::read('debug') > 1;
 
-		// People Have been asking for this forever.
+		// Check if PHP's LDAP module is enabled
+		if(!function_exists('ldap_connect')){
+			// TODO insert Exception
+		}
+
+		$link = $this->connect(); // TODO we don't use $link
+
+		// Set environment according to LDAP type
 		if (isset($config['type']) && !empty($config['type'])) {
 			switch($config['type']) {
 				case 'Netscape':
@@ -206,23 +257,23 @@ class LdapSource extends DataSource {
 		}
 
 		$this->setSchemaPath();
-		return $link;
 	}
 
 /**
- * Destructor
- *
- * Closes connection to the server
+ * Closes the current datasource.
  *
  * @return void
  */
 	public function __destruct() {
 		$this->close();
-		parent::__destruct();
 	}
 
 /**
- * Wrapper method to call ldap_* function. Hardcoded ldap functions make test be difficult.
+ * Wrapper method to call ldap_* function. Hardcoded ldap functions make tests more difficult
+ *
+ * @return array user function
+ * @todo might be true hardcoded ldap function calls are more difficult, but one function to rule them all?
+ * @todo what about checking for errors and logging them here?
  */
 	protected function _call() {
 		$args = func_get_args();
@@ -242,41 +293,46 @@ class LdapSource extends DataSource {
  * @param string $field Field name
  * @return string Field name
  * @author Graham Weldon
+ * @todo check if still needed/useful
  */
 	public function name($field) {
 		return $field;
 	}
 
 /**
- * connect([$bindDN], [$passwd])  create the actual connection to the ldap server
+ * connect([$bindDN], [$bindPasswd])  create the actual connection to the ldap server
  * This function supports failover, so if your config['host'] is an array it will try the first one, if it fails,
  * jumps to the next and attempts to connect and so on. If will also check try to setup any special connection options
- * needed like referal chasing and tls support
+ * needed like referral chasing and tls support
  *
  * @param string the users dn to bind with
  * @param string the password for the previously state bindDN
  * @return boolean the status of the connection
  * @throws Exception when tls option was specified and starting tls was failed
+ * @todo Move failover detection & iteration code to either construct or its own function
+ * @todo connect should only what its name says, try to connect (+ bind), return success
+ * @todo why not use a $config['failoverHosts'] array instead of all hosts in host?
  */
-	public function connect($bindDN = null, $passwd = null) {
-		$config = array_merge($this->_baseConfig, $this->config);
-		$this->connected = false;
-		$hasFailover = false;
+	public function connect($bindDN = null, $bindPasswd = null) {
+		//$config = array_merge($this->_baseConfig, $this->config); // TODO REMOVE
+		$config 		= $this->config;
+		$hasFailover	= false;
 		if (isset($config['host']) && is_array($config['host'])) {
 			$config['host'] = $config['host'][$this->_multiMasterUse];
 			if (count($this->config['host']) > (1 + $this->_multiMasterUse)) {
 				$hasFailOver = true;
 			}
 		}
+
 		$bindDN = (empty($bindDN)) ? $config['login'] : $bindDN;
-		$bindPasswd = (empty($passwd)) ? $config['password'] : $passwd;
-		$this->database = $this->_call('connect', $config['host']);
-		if (!$this->database) {
+		$bindPasswd = (empty($bindPasswd)) ? $config['password'] : $bindPasswd;
+		$this->_connection = $this->_call('connect', $config['host']);
+		if (!$this->_connection) {
 			//Try Next Server Listed
 			if ($hasFailover) {
 				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse], 'ldap.error');
 				$this->_multiMasterUse++;
-				$this->connect($bindDN, $passwd);
+				$this->connect($bindDN, $bindPasswd);
 				if ($this->connected) {
 					return $this->connected;
 				}
@@ -284,27 +340,27 @@ class LdapSource extends DataSource {
 		}
 
 		//Set our protocol version usually version 3
-		$this->_call('set_option', $this->database, LDAP_OPT_PROTOCOL_VERSION, $config['version']);
+		$this->_call('set_option', $this->_connection, LDAP_OPT_PROTOCOL_VERSION, $config['version']);
 
 		if ($config['tls']) {
-			if (!$this->_call('start_tls', $this->database)) {
+			if (!$this->_call('start_tls', $this->_connection)) {
 				$this->log('Ldap_start_tls failed', 'ldap.error');
 				throw new Exception('Ldap_start_tls failed');
 			}
 		}
-		//So little known fact, if your php-ldap lib is built against openldap like pretty much every linux
-		//distro out their like redhat, suse etc. The connect doesn't acutally happen when you call ldap_connect
-		//it happens when you call ldap_bind. So if you are using failover then you have to test here also.
-		$bindResult = $this->_call('bind', $this->database, $bindDN, $bindPasswd);
+		// So little known fact, if your php-ldap lib is built against openldap like pretty much every linux
+		// distro out there like Redhat, SUSE etc. The connect doesn't actually happen when you call ldap_connect
+		// it happens when you call ldap_bind. So if you are using failover then you have to test here also.
+		$bindResult = $this->_call('bind', $this->_connection, $bindDN, $bindPasswd);
 		if (!$bindResult) {
-			if ($this->_call('errno', $this->database) == 49) {
+			if ($this->_call('errno', $this->_connection) == 49) {
 				$this->log("Auth failed for '$bindDN'!", 'ldap.error');
 			} elseif ($hasFailover) {
 				$this->log('Trying Next LDAP Server in list:' . $this->config['host'][$this->_multiMasterUse], 'ldap.error');
 				$this->_multiMasterUse++;
-				$this->connect($bindDN, $passwd);
+				$this->connect($bindDN, $bindPasswd);
 				if ($this->connected) {
-					return $this->connected;
+					return $this->connected; // TODO isn't this superfluous?
 				}
 			}
 		} else {
@@ -314,39 +370,24 @@ class LdapSource extends DataSource {
 	}
 
 /**
- * auth($dn, $passwd)
- * Test if the dn/passwd combo is valid
- * This may actually belong in the component code, will look into that
+ * Close connection
  *
- * @param string bindDN to connect as
- * @param string password for the bindDN
- * @param boolean or string on error
- */
-	public function auth($dn, $passwd) {
-		$this->connect($dn, $passwd);
-		if ($this->connected) {
-			return true;
-		} else {
-			$this->log("Auth Error: for '$dn': " . $this->lastError(), 'ldap.error');
-			return $this->lastError();
-		}
-	}
-
-/**
- * Disconnects database, kills the connection and says the connection is closed,
- * and if DEBUG is turned on, the log for this object is shown.
- *
+ * Disconnects and if fullDebug is set, the log for this object is shown.
  */
 	public function close() {
-		if ($this->fullDebug && Configure::read() > 1) {
+		if ($this->fullDebug) {
 			$this->showLog();
 		}
 		$this->disconnect();
 	}
 
 /**
- * disconnect close connection and release any remaining results in the buffer
+ * Disconnect from server
  *
+ * Disconnects from server, kills the connection and sets _connection to false,
+ * and release any remaining results in the buffer
+ *
+ * @return bool Always false
  */
 	public function disconnect() {
 		foreach ($this->_results as $result) {
@@ -354,35 +395,12 @@ class LdapSource extends DataSource {
 				$this->_call('free_result', $result);
 			}
 		}
-		$this->_call('unbind', $this->database);
+		if (is_resource($this->_connection)) {
+			$this->_call('unbind', $this->_connection);
+		}
 		$this->connected = false;
 		return $this->connected;
 	}
-
-/**
- * Checks if it's connected to the database
- *
- * @return boolean True if the database is connected, else false
- */
-	public function isConnected() {
-		return $this->connected;
-	}
-
-/**
- * Reconnects to database server with optional new settings
- *
- * @param array $config An array defining the new configuration settings
- * @return boolean True on success, false on failure
- */
-	public function reconnect($config = null) {
-		$this->disconnect();
-		if ($config != null) {
-			$this->config = array_merge($this->_baseConfig, $this->config, $config);
-		}
-		return $this->connect();
-	}
-
-	// Crud Functions follow
 
 /**
  * The "C" in CRUD
@@ -390,7 +408,8 @@ class LdapSource extends DataSource {
  * @param Model $model
  * @param array $fields containing the field names
  * @param array $values containing the fields' values
- * @return true on success, false on error
+ * @return bool true on success, false on error
+ * @todo check if still needed/useful
  */
 	public function create(Model $model, $fields = null, $values = null) {
 		$basedn = $this->config['basedn'];
@@ -417,7 +436,7 @@ class LdapSource extends DataSource {
 			$fieldsData[$fields[$i]] = $values[$i];
 		}
 
-		//Lets make our DN, this is made from the useTable & basedn + primary key. Logically this corelate to LDAP
+		//Lets make our DN, this is made from the useTable & basedn + primary key. Logically this correlate to LDAP
 
 		if (isset($table) && preg_match('/=/', $table)) {
 			$table = $table . ', ';
@@ -432,14 +451,14 @@ class LdapSource extends DataSource {
 		}
 		$dn = $key . $table . $basedn;
 
-		$res = $this->_call('add', $this->database, $dn, $fieldsData);
+		$res = $this->_call('add', $this->_connection, $dn, $fieldsData);
 		// Add the entry
 		if ($res) {
 			$model->setInsertID($id);
 			$model->id = $id;
 			return true;
 		} else {
-			$this->log("Failed to add ldap entry: dn:$dn\nData:" . print_r($fieldsData, true) . "\n" . $this->_call('error', $this->database), 'ldap.error');
+			$this->log("Failed to add ldap entry: dn:$dn\nData:" . print_r($fieldsData, true) . "\n" . $this->_call('error', $this->_connection), 'ldap.error');
 			$model->onError();
 			return false;
 		}
@@ -448,6 +467,8 @@ class LdapSource extends DataSource {
 /**
  * Returns the query
  *
+ * @return string The query
+ * @todo check if still needed/useful
  */
 	public function query() {
 		$args = func_get_args();
@@ -484,6 +505,7 @@ class LdapSource extends DataSource {
 		}
 		return $query;
 	}
+
 /**
  * The "R" in CRUD
  *
@@ -491,6 +513,8 @@ class LdapSource extends DataSource {
  * @param array $queryData
  * @param integer $recursive Number of levels of association
  * @return unknown
+ * @todo check if still needed/useful
+ * @todo Pagination doesn't work because we can't determine the type properly
  */
 	public function read(Model $model, $queryData = array(), $recursive = null) {
 		$this->model = $model;
@@ -500,12 +524,12 @@ class LdapSource extends DataSource {
 			$model->recursive = $recursive;
 		}
 
-		// Check if we are doing a 'count'.. this is kinda ugly but i couldn't find a better way to do this, yet
-		if (is_string($queryData['fields']) && $queryData['fields'] == 'COUNT(*) AS ' . $this->name('count')) {
+		// Prevent warnings when doing count, e.g. for pagination
+		if ($queryData['fields'] === 'count') {
 			$queryData['fields'] = array();
 		}
 
-		// Prepare query data ------------------------
+		// Prepare query data
 		$queryData['conditions'] = $this->_conditions($queryData['conditions'], $model);
 		if (empty($queryData['targetDn'])) {
 			$queryData['targetDn'] = $model->useTable;
@@ -515,7 +539,7 @@ class LdapSource extends DataSource {
 		if (empty($queryData['order']))
 				$queryData['order'] = array($model->primaryKey);
 
-		// Associations links --------------------------
+		// Associations links
 		foreach ($model->_associations as $type) {
 			foreach ($model->{$type} as $assoc => $assocData) {
 				if ($model->recursive > -1) {
@@ -525,20 +549,20 @@ class LdapSource extends DataSource {
 			}
 		}
 
-		// Execute search query ------------------------
+		// Execute search query
 		$res = $this->_executeQuery($queryData);
 
 		if ($this->lastNumRows() === 0) {
 			return false;
 		}
 
-		// Format results -----------------------------
-		$this->_call('sort', $this->database, $res, $queryData['order'][0]);
-		$resultSet = $this->_call('get_entries', $this->database, $res);
+		// Format results
+		$this->_call('sort', $this->_connection, $res, $queryData['order'][0]);
+		$resultSet = $this->_call('get_entries', $this->_connection, $res);
 		$resultSet = $this->_ldapFormat($model, $resultSet);
 
-		// Query on linked models ----------------------
-		if ($model->recursive > 0) {
+		// Query on linked models
+		if ($model->recursive > 0 && isset($model->__associations)) {
 			foreach ($model->_associations as $type) {
 
 				foreach ($model->{$type} as $assoc => $assocData) {
@@ -572,6 +596,8 @@ class LdapSource extends DataSource {
 
 /**
  * The "U" in CRUD
+ *
+ * @todo check if still needed/useful
  */
 	public function update(Model $model, $fields = null, $values = null, $conditions = null) {
 		$fieldsData = array();
@@ -620,10 +646,10 @@ class LdapSource extends DataSource {
 		if ($resultSet) {
 			$_dn = $resultSet[0][$model->alias]['dn'];
 
-			if ($this->_call('modify', $this->database, $_dn, $entry)) {
+			if ($this->_call('modify', $this->_connection, $_dn, $entry)) {
 				return true;
 			} else {
-				$this->log("Error updating $_dn: " . $this->_call('error', $this->database) . "\nHere is what I sent: " . print_r($entry, true), 'ldap.error');
+				$this->log("Error updating $_dn: " . $this->_call('error', $this->_connection) . "\nHere is what I sent: " . print_r($entry, true), 'ldap.error');
 				return false;
 			}
 		}
@@ -635,6 +661,8 @@ class LdapSource extends DataSource {
 
 /**
  * The "D" in CRUD
+ *
+ * @todo check if still needed/useful
  */
 	public function delete(Model $model, $conditions = null) {
 		// Boolean to determine if we want to recursively delete or not
@@ -665,25 +693,27 @@ class LdapSource extends DataSource {
 				}
 			} else {
 				// Single entry delete
-				if ($this->_call('delete', $this->database, $dn)) {
+				if ($this->_call('delete', $this->_connection, $dn)) {
 					return true;
 				}
 			}
 		}
 
 		$model->onError();
-		$errMsg = $this->_call('error', $this->database);
+		$errMsg = $this->_call('error', $this->_connection);
 		$this->log("Failed Trying to delete: $dn \nLdap Erro:$errMsg", 'ldap.error');
 		return false;
 	}
 
 /**
- * Courtesy of gabriel at hrz dot uni-marburg dot de @ http://ar.php.net/ldap_delete
+ * Courtesy of gabriel at hrz dot uni-marburg dot de @ http://ch1.php.net/ldap_delete
+ *
+ * @todo check if still needed/useful
  */
 	protected function _deleteRecursively($_dn) {
 		// Search for sub entries
-		$subentries = $this->_call('list', $this->database, $_dn, "objectClass=*", array());
-		$info = $this->_call('get_entries', $this->database, $subentries);
+		$subentries = $this->_call('list', $this->_connection, $_dn, "objectClass=*", array());
+		$info = $this->_call('get_entries', $this->_connection, $subentries);
 		for ($i = 0; $i < $info['count']; $i++) {
 			// deleting recursively sub entries
 			$result = $this->_deleteRecursively($info[$i]['dn']);
@@ -692,11 +722,13 @@ class LdapSource extends DataSource {
 			}
 		}
 
-		return $this->_call('delete', $this->database, $_dn);
+		return $this->_call('delete', $this->_connection, $_dn);
 	}
 
 /**
  * Here are the functions that try to do model associations
+ *
+ * @todo check if still needed/useful
  */
 	public function generateAssociationQuery(Model $model, $linkModel, $type, $association, $assocData, &$queryData, $external, &$resultSet) {
 		$queryData = $this->_scrubQueryData($queryData);
@@ -744,10 +776,11 @@ class LdapSource extends DataSource {
  * @param array $stack
  * @return mixed
  * @throws CakeException when results cannot be created.
+ * @todo check if still needed/useful
  */
 	public function queryAssociation(Model $model, &$linkModel, $type, $association, $assocData, &$queryData, $external, &$resultSet, $recursive, $stack) {
 		if (!isset($resultSet) || !is_array($resultSet)) {
-			if (Configure::read() > 0) {
+			if ($this->fullDebug) {
 				echo '<div style = "font: Verdana bold 12px; color: #FF0000">SQL Error in model ' . $model->name . ': ';
 				if (isset($this->error) && $this->error != null) {
 					echo $this->error;
@@ -763,7 +796,7 @@ class LdapSource extends DataSource {
 			$row = & $resultSet[$i];
 			$queryData = $this->generateAssociationQuery($model, $linkModel, $type, $association, $assocData, $queryData, $external, $row);
 			$fetch = $this->_executeQuery($queryData);
-			$fetch = $this->_call('get_entries', $this->database, $fetch);
+			$fetch = $this->_call('get_entries', $this->_connection, $fetch);
 			$fetch = $this->_ldapFormat($linkModel,$fetch);
 
 			if (!empty($fetch) && is_array($fetch)) {
@@ -797,24 +830,28 @@ class LdapSource extends DataSource {
 /**
  * Returns a formatted error message from previous database operation.
  *
- * @return string Error message with error number
+ * @return string|null Error message with error number or null when no error occured
  */
 	public function lastError() {
-		if ($errno = $this->_call('errno', $this->database)) {
+		$errno = $this->_call('errno', $this->_connection);
+		if ($errno) {
 			return $errno . ': ' . $this->_call('err2str', $errno);
 		}
 		return null;
 	}
 
 /**
- * Returns number of rows in previous resultset. If no previous resultset exists,
- * this returns false.
+ * Returns number of rows in previous result set.
  *
- * @return int Number of rows in resultset
+ * If no previous result set exists, it returns false.
+ *
+ * @param null $source
+ * @return int Number of rows in result set
+ * @todo check if still needed/useful
  */
 	public function lastNumRows($source = null) {
 		if ($this->_result && is_resource($this->_result)) {
-			return $this->_call('count_entries', $this->database, $this->_result);
+			return $this->_call('count_entries', $this->_connection, $this->_result);
 		}
 		return null;
 	}
@@ -822,8 +859,12 @@ class LdapSource extends DataSource {
 /**
  * Utility function to convert Active Directory timestamps to unix ones
  *
- * @param integer $ad_timestamp Active directory timestamp
+ * @param $adTimestamp
+ * @internal param int $ad_timestamp Active directory timestamp
  * @return integer Unix timestamp
+ * @todo move epodDiff to properties
+ * @todo link is missing!
+ * @todo check if still needed/useful
  */
 	public static function convertTimestampADToUnix($adTimestamp) {
 		$epochDiff = 11644473600; // difference 1601<>1970 in seconds. see reference URL
@@ -834,16 +875,20 @@ class LdapSource extends DataSource {
 
 /**
  * The following was kindly "borrowed" from the excellent phpldapadmin project
+ *
+ * @todo add copyright/link to phpldapadmin project
+ * @todo check for updated version
+ * @todo check if still needed/useful
  */
 	protected function _getLDAPSchema() {
 		$schemaTypes = array('objectclasses', 'attributetypes');
-		$results = $this->_call('read', $this->database, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
+		$results = $this->_call('read', $this->_connection, $this->SchemaDN, $this->SchemaFilter, $schemaTypes, 0, 0, 0, LDAP_DEREF_ALWAYS);
 		if (false === $results) {
 			trigger_error("LDAP schema filter '$this->SchemaFilter' is invalid!");
 			return;
 		}
 
-		$schemaEntries = $this->_call('get_entries', $this->database, $results);
+		$schemaEntries = $this->_call('get_entries', $this->_connection, $results);
 
 		if ($schemaEntries) {
 			$return = array();
@@ -952,6 +997,15 @@ class LdapSource extends DataSource {
 		return $return;
 	}
 
+/**
+ * _parseList
+ *
+ * @param $i
+ * @param $strings
+ * @param $attrs
+ * @return mixed
+ * @todo check if still needed/useful
+ */
 	protected function _parseList($i, $strings, &$attrs) {
 	/**
 	 ** A list starts with a (followed by a list of attributes separated by $ terminated by)
@@ -1004,25 +1058,49 @@ class LdapSource extends DataSource {
 	}
 
 /**
- * Function not supported
+ * Function to actually query LDAP
+ *
+ * @param $query
+ * @param array $options
+ * @param array $params
+ * @return void null
+ * @todo check if still needed/useful
  */
-	public function execute($query) {
-		return null;
+	public function execute($query, $options = array(), $params = array()) {
+		$options += array('log' => $this->fullDebug);
+
+		$t = microtime(true);
+		$this->_result = $this->_executeQuery($query, $params);
+
+		if ($options['log']) {
+			$this->took = round((microtime(true) - $t) * 1000, 0);
+			$this->numRows = $this->affected = $this->lastAffected();
+			$this->logQuery($query);
+		}
+		return $this->_result;
 	}
 
 /**
- * Function not supported
+ * Execute query, not supported
+ *
+ * Function not supported by LDAP
+ *
+ * @param $query
+ * @param bool $cache
+ * @return array
+ * @todo check if still needed/useful
  */
 	public function fetchAll($query, $cache = true) {
 		return array();
 	}
 
-	// Logs --------------------------------------------------------------
-
 /**
  * Log given LDAP query.
  *
+ * Reimplementation of DboSource::logQuery
+ *
  * @param string $query LDAP statement
+ * @return void
  */
 	public function logQuery($query) {
 		$this->_queriesCnt++;
@@ -1037,10 +1115,6 @@ class LdapSource extends DataSource {
 		if (count($this->_queriesLog) > $this->_queriesLogMax) {
 			array_pop($this->_queriesLog);
 		}
-		if ($this->error) {
-			$this->log($this->error, 'ldap.error');
-			return false;
-		}
 	}
 
 /**
@@ -1049,6 +1123,7 @@ class LdapSource extends DataSource {
  * @param boolean $sorted Get the queries sorted by time taken, defaults to false.
  * @param boolean $clear If True the existing log will cleared.
  * @return array Array of queries run as an array
+ * @todo check if still needed/useful
  */
 	public function getLog($sorted = false, $clear = true) {
 		if ($sorted) {
@@ -1069,6 +1144,7 @@ class LdapSource extends DataSource {
  *
  * @param boolean $sorted Get the queries sorted by time taken, defaults to false.
  * @return void
+ * @todo check if still needed/useful
  */
 	public function showLog($sorted = false) {
 		$log = $this->getLog($sorted, false);
@@ -1087,6 +1163,14 @@ class LdapSource extends DataSource {
 		}
 	}
 
+/**
+ * _conditions
+ *
+ * @param $conditions
+ * @param $model
+ * @return array|string
+ * @todo check if still needed/useful
+ */
 	protected function _conditions($conditions, $model) {
 		$res = '';
 		$key = $model->primaryKey;
@@ -1109,13 +1193,6 @@ class LdapSource extends DataSource {
 			$conditions = $res;
 		}
 
-		if (is_array($conditions)) {
-			// Conditions expressed as an array
-			if (empty($conditions)) {
-				$res = 'objectclass=*';
-			}
-		}
-
 		if (empty($conditions)) {
 			$res = 'objectclass=*';
 		} else {
@@ -1129,6 +1206,7 @@ class LdapSource extends DataSource {
  *
  * @param array $conditions condition
  * @return string
+ * @todo check if still needed/useful
  */
 	protected function _conditionsArrayToString($conditions) {
 		$opsRec = array('and' => array('prefix' => '&'), 'or' => array('prefix' => '|'));
@@ -1183,15 +1261,29 @@ class LdapSource extends DataSource {
 		}
 	}
 
+/**
+ * checkBaseDn
+ *
+ * @param $targetDN
+ * @return int
+ * @todo check if still needed/useful
+ */
 	public function checkBaseDn($targetDN) {
 		$parts = preg_split('/,\s*/', $this->config['basedn']);
 		$pattern = '/' . implode(',\s*', $parts) . '/i';
 		return preg_match($pattern, $targetDN);
 	}
 
+/**
+ * _executeQuery
+ *
+ * @param array $queryData
+ * @param bool $cache
+ * @return bool|mixed
+ * @todo check if still needed/useful
+ */
 	protected function _executeQuery($queryData = array(), $cache = true) {
 		$t = microtime(true);
-
 		$pattern = '/,[ \t]+(\w+)=/';
 		$queryData['targetDn'] = preg_replace($pattern, ',$1=', $queryData['targetDn']);
 		if (!$this->checkBaseDn($queryData['targetDn'])) {
@@ -1222,27 +1314,28 @@ class LdapSource extends DataSource {
 			switch ($queryData['type']) {
 				case 'search':
 					// TODO pb ldap_search & $queryData['limit']
+
 					if (empty($queryData['fields'])) {
 						$queryData['fields'] = $this->defaultNSAttributes();
 					}
 
 					//Handle LDAP Scope
 					if (isset($queryData['scope']) && $queryData['scope'] == 'base') {
-						$res = $this->_call('read', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
+						$res = $this->_call('read', $this->_connection, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
 					} elseif (isset($queryData['scope']) && $queryData['scope'] == 'one') {
-						$res = $this->_call('list', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
+						$res = $this->_call('list', $this->_connection, $queryData['targetDn'], $queryData['conditions'], $queryData['fields']);
 					} else {
 						if ($queryData['fields'] == 1) $queryData['fields'] = array();
-						$res = $this->_call('search', $this->database, $queryData['targetDn'], $queryData['conditions'], $queryData['fields'], 0, $queryData['limit']);
+						$res = $this->_call('search', $this->_connection, $queryData['targetDn'], $queryData['conditions'], $queryData['fields'], 0, $queryData['limit']);
 					}
 
 					if (!$res) {
 						$res = false;
-						$errMsg = $this->_call('error', $this->database);
+						$errMsg = $this->_call('error', $this->_connection);
 						$this->log("Query Params Failed:" . print_r($queryData, true) . ' Error: ' . $errMsg, 'ldap.error');
 						$this->count = 0;
 					} else {
-						$this->count = $this->_call('count_entries', $this->database, $res);
+						$this->count = $this->_call('count_entries', $this->_connection, $res);
 					}
 
 					if ($cache) {
@@ -1252,7 +1345,7 @@ class LdapSource extends DataSource {
 					}
 					break;
 				case 'delete':
-					$res = $this->_call('delete', $this->database, $queryData['targetDn'] . ',' . $this->config['basedn']);
+					$res = $this->_call('delete', $this->_connection, $queryData['targetDn'] . ',' . $this->config['basedn']);
 					break;
 				default:
 					$res = false;
@@ -1273,6 +1366,13 @@ class LdapSource extends DataSource {
 		return $this->_result;
 	}
 
+/**
+ * _queryToString
+ *
+ * @param $queryData
+ * @return string
+ * @todo check if still needed/useful
+ */
 	protected function _queryToString($queryData) {
 		$tmp = '';
 		if (!empty($queryData['scope'])) {
@@ -1304,8 +1404,17 @@ class LdapSource extends DataSource {
 		return $queryData['type'] . $tmp;
 	}
 
+/**
+ * _ldapFormat
+ *
+ * @param Model $model
+ * @param $data
+ * @return array result formatted
+ * @todo check if still needed/useful
+ */
 	protected function _ldapFormat(Model $model, $data) {
-		$res = array();
+		$resultFormatted = array();
+
 
 		foreach ($data as $key => $row) {
 			if ($key === 'count') {
@@ -1314,32 +1423,39 @@ class LdapSource extends DataSource {
 
 			foreach ($row as $key1 => $param) {
 				if ($key1 === 'dn') {
-					$res[$key][$model->name][$key1] = $param;
+					$resultFormatted[$key][$model->name][$key1] = $param;
 					continue;
 				}
 				if (!is_numeric($key1)) {
 					continue;
 				}
 				if ($row[$param]['count'] === 1) {
-					$res[$key][$model->name][$param] = $row[$param][0];
+					$resultFormatted[$key][$model->name][$param] = $row[$param][0];
 				} else {
 					foreach ($row[$param] as $key2 => $item) {
 						if ($key2 === 'count') {
 							continue;
 						}
-						$res[$key][$model->name][$param][] = $item;
+						$resultFormatted[$key][$model->name][$param][] = $item;
 					}
 				}
 			}
 		}
-		return $res;
+		return $resultFormatted;
 	}
 
+/**
+ * _ldapQuote
+ *
+ * @param $str
+ * @return mixed
+ * @todo check if still needed/useful
+ */
 	protected function _ldapQuote($str) {
 		return str_replace(
-				array('\\', ' ', '*', '(', ')'),
-				array('\\5c', '\\20', '\\2a', '\\28', '\\29'),
-				$str
+			array('\\', ' ', '*', '(', ')'),
+			array('\\5c', '\\20', '\\2a', '\\28', '\\29'),
+			$str
 		);
 	}
 
@@ -1348,6 +1464,7 @@ class LdapSource extends DataSource {
  *
  * @param array $data
  * @return array
+ * @todo check if still needed/useful
  */
 	protected function _scrubQueryData($data) {
 		static $base = null;
@@ -1364,6 +1481,12 @@ class LdapSource extends DataSource {
 		return (array)$data + $base;
 	}
 
+/**
+ * _getObjectclasses
+ *
+ * @return null
+ * @todo check if still needed/useful
+ */
 	protected function _getObjectclasses() {
 		$cache = null;
 		if ($this->cacheSources !== false) {
@@ -1388,10 +1511,17 @@ class LdapSource extends DataSource {
 		return $objectclasses;
 	}
 
+/**
+ * boolean
+ *
+ * Function not supported by LDAP
+ *
+ * @return null
+ * @todo check if still needed/useful
+ */
 	public function boolean() {
 		return null;
 	}
-
 
 /**
  * Returns an calculation, i.e. COUNT() or MAX()
@@ -1400,6 +1530,7 @@ class LdapSource extends DataSource {
  * @param string $func Lowercase name of SQL function, i.e. 'count' or 'max'
  * @param array $params Function parameters (any values must be quoted manually)
  * @return string An SQL calculation function
+ * @todo check if still needed/useful
  */
 	public function calculate(Model $model, $func, $params = array()) {
 		$params = (array)$params;
@@ -1413,13 +1544,20 @@ class LdapSource extends DataSource {
 					$queryData['scope'] = 'base';
 					$query = $this->read($model, $queryData);
 				}
-				return $this->count;
+				return 'count';
 			case 'max':
 			case 'min':
 			break;
 		}
 	}
 
+/**
+ * describe
+ *
+ * @param Model|string $model
+ * @return array
+ * @todo check if still needed/useful
+ */
 	public function describe($model) {
 		$args = func_get_args();
 		$schemas = $this->_getLDAPSchema();
@@ -1433,6 +1571,12 @@ class LdapSource extends DataSource {
 		}
 	}
 
+/**
+ * defaultNSAttributes
+ *
+ * @return array
+ * @todo check if still needed/useful
+ */
 	public function defaultNSAttributes() {
 		$fields = '* ' . $this->OperationalAttributes;
 		return explode(' ', $fields);
@@ -1441,6 +1585,7 @@ class LdapSource extends DataSource {
 /**
  * debugLDAPConnection debugs the current connection to check the settings
  *
+ * @todo check if still needed/useful
  */
 	public function debugLDAPConnection() {
 		$opts = array(
@@ -1460,7 +1605,7 @@ class LdapSource extends DataSource {
 		);
 		foreach ($opts as $opt) {
 			$ve = '';
-			$this->_call('get_option', $this->database, constant($opt), $ve);
+			$this->_call('get_option', $this->_connection, constant($opt), $ve);
 			$this->log("Option={$opt}, Value=" . print_r($ve, true),'debug');
 		}
 	}
@@ -1470,8 +1615,9 @@ class LdapSource extends DataSource {
  * iPlanet, Redhat-DS, Project-389 etc you need to ask for specific
  * attributes like so. Other wise the attributes listed below wont
  * show up
+ * @todo check if still needed/useful
  */
-	public function setNetscapeEnv() {
+	protected function setNetscapeEnv() {
 		$this->OperationalAttributes = implode(' ', array(
 			'accountUnlockTime',
 			'aci',
@@ -1532,9 +1678,14 @@ class LdapSource extends DataSource {
 		));
 	}
 
-	public function setActiveDirectoryEnv() {
-		//Need to disable referals for AD
-		$this->_call('set_option', $this->database, LDAP_OPT_REFERRALS, 0);
+/**
+ * setActiveDirectoryEnv
+ *
+ * @todo check if still needed/useful
+ */
+	protected function setActiveDirectoryEnv() {
+		//Need to disable referrals for AD
+		$this->_call('set_option', $this->_connection, LDAP_OPT_REFERRALS, 0);
 		$this->OperationalAttributes = ' + ';
 		$this->SchemaFilter = '(objectClass=subschema)';
 		$this->SchemaAttributes = implode(' ', array(
@@ -1549,15 +1700,38 @@ class LdapSource extends DataSource {
 		));
 	}
 
-	public function setOpenLDAPEnv() {
+/**
+ * setOpenLDAPEnv
+ *
+ * @todo check if still needed/useful
+ */
+	protected function setOpenLDAPEnv() {
 		$this->OperationalAttributes = ' + ';
 		$this->SchemaFilter = '(objectClass=*)';
 	}
 
+/**
+ * setSchemaPath
+ *
+ * @todo Better explanation what this method does, see link
+ * @link http://www.analogrithems.com/rant/2010/03/29/find-the-schema-path-in-ldap/
+ */
 	public function setSchemaPath() {
-		$checkDN = $this->_call('read', $this->database, '', 'objectClass=*', array('subschemaSubentry'));
-		$schemaEntry = $this->_call('get_entries', $this->database, $checkDN);
+		$checkDN = $this->_call('read', $this->_connection, '', 'objectClass=*', array('subschemaSubentry'));
+		$schemaEntry = $this->_call('get_entries', $this->_connection, $checkDN);
 		$this->SchemaDN = $schemaEntry[0]['subschemasubentry'][0];
 	}
 
+/**
+* Returns an array of sources (tables) in the database.
+*
+* @param mixed $data
+* @return array Array of tablenames in the database
+*/
+	public function listSources($data = null) {
+		$cache = parent::listSources();
+		if ($cache !== null) {
+			return $cache;
+		}
+	}
 }

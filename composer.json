@@ -1,0 +1,15 @@
+{
+    "name": "cakephp/ldapsource",
+    "description": "LDAP DataSource for CakePHP 2.3+",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marc Wuerth",
+            "email": "ravage@bluewin.ch"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+
+    }
+}
